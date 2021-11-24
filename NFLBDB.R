@@ -81,14 +81,14 @@ all_returns$returnerId = as.numeric(all_returns$returnerId)
 all_returns = all_returns %>%
   drop_na(returnerId)
 
-all_returns$sideoffield = case_when(all_returns$y.x >= 29.9 ~ "Right", TRUE ~ "Left")
+all_returns$side_off_field = case_when(all_returns$y.x >= 29.9 ~ "Right", TRUE ~ "Left")
 
 all_returns = all_returns %>% 
   left_join(players, by=c("returnerId"))
 
 all_returns$displayName = as.factor(all_returns$displayName)
 all_returns$crosses =   as.factor(all_returns$crosses)
-all_returns$sideoffield =  as.factor(all_returns$sideoffield)
+all_returns$side_off_field =  as.factor(all_returns$side_off_field)
 
 all_returns = all_returns %>%
   dplyr::select(-c(displayName.y, height, weight, birthDate, collegeName, Position))
@@ -100,8 +100,17 @@ dplyr::count(all_returns, displayName)
 ggplot(all_returns, aes(crosses, kickReturnYardage))+
   geom_boxplot()
 
-ggplot(all_returns, aes(sideoffield, kickReturnYardage))+
+ggplot(all_returns, aes(side_off_field, kickReturnYardage))+
   geom_boxplot()
 
-summary(lm(kickReturnYardage ~ crosses + sideoffield, data = all_returns))
-summary(lm(kickReturnYardage ~ crosses + sideoffield + displayName, data = all_returns))
+fit.1 = lm(kickReturnYardage ~ crosses + side_off_field + displayName, data = all_returns)
+summary(fit.1)
+
+table(all_returns$displayName, all_returns$crosses)
+
+newdata = data.frame(crosses="FALSE", side_off_field="Right", displayName="Jamal Agnew")
+predict(fit.1, newdata)
+ggplot(all_returns, aes(crosses, side_off_field, fill= kickReturnYardage)) + 
+  geom_tile()+
+  scale_fill_gradient(low="white", high="black") 
+  
