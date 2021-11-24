@@ -1,11 +1,1 @@
-Things to do:
--	Analyzing kicking strategy
--	Where is the best spot to kick the ball?Buckets:
-	-	Touchback
-	-	0-5
-	-	5-10
-	-	10-15
-	-	25-20
-	-	20-25
-- Kick returner tendency and expected return yards
--	Shiny App to determine which bucket we should aim for and what section (L/M/R) (inside or outside the numbers/hash) based on the returner and which formation we should be in
+TBD
