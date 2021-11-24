@@ -74,6 +74,12 @@ no_cross_return = all_returns %>%
 cross_returns = all_returns %>%
   dplyr::filter(crosses == "TRUE")  
 
+right_return = all_returns %>%
+  dplyr::filter(side_of_field == "Right")
+
+left_return = all_returns %>%
+  dplyr::filter(side_of_field == "Left")  
+
 mean(no_cross_return$kickReturnYardage)
 mean(cross_returns$kickReturnYardage)
 
@@ -81,14 +87,14 @@ all_returns$returnerId = as.numeric(all_returns$returnerId)
 all_returns = all_returns %>%
   drop_na(returnerId)
 
-all_returns$side_off_field = case_when(all_returns$y.x >= 29.9 ~ "Right", TRUE ~ "Left")
+all_returns$side_of_field = case_when(all_returns$y.x >= 29.9 ~ "Right", TRUE ~ "Left")
 
 all_returns = all_returns %>% 
   left_join(players, by=c("returnerId"))
 
 all_returns$displayName = as.factor(all_returns$displayName)
 all_returns$crosses =   as.factor(all_returns$crosses)
-all_returns$side_off_field =  as.factor(all_returns$side_off_field)
+all_returns$side_of_field =  as.factor(all_returns$side_of_field)
 
 all_returns = all_returns %>%
   dplyr::select(-c(displayName.y, height, weight, birthDate, collegeName, Position))
@@ -100,17 +106,27 @@ dplyr::count(all_returns, displayName)
 ggplot(all_returns, aes(crosses, kickReturnYardage))+
   geom_boxplot()
 
-ggplot(all_returns, aes(side_off_field, kickReturnYardage))+
+ggplot(all_returns, aes(side_of_field, kickReturnYardage))+
   geom_boxplot()
 
-fit.1 = lm(kickReturnYardage ~ crosses + side_off_field + displayName, data = all_returns)
+# t test for difference in crossing
+t.test(right_return$kickReturnYardage,left_return$kickReturnYardage)
+#there is a difference on the side of the field
+
+# t test for side of the field we start on
+t.test(no_cross_return$kickReturnYardage,cross_returns$kickReturnYardage)
+#there is a difference on the side of field
+
+fit.1 = lm(kickReturnYardage ~ crosses + side_of_field + displayName, data = all_returns)
 summary(fit.1)
 
 table(all_returns$displayName, all_returns$crosses)
 
-newdata = data.frame(crosses="FALSE", side_off_field="Right", displayName="Jamal Agnew")
+newdata = data.frame(crosses="FALSE", side_of_field="Right", displayName="Jamal Agnew")
 predict(fit.1, newdata)
-ggplot(all_returns, aes(crosses, side_off_field, fill= kickReturnYardage)) + 
+ggplot(all_returns, aes(crosses, side_of_field, fill= kickReturnYardage)) + 
   geom_tile()+
   scale_fill_gradient(low="white", high="black") 
   
+
+
