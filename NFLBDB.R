@@ -2,19 +2,25 @@
 #install.packages("devtools")
 #install.packages("tidyverse")
 #install.packages("nflfastR")
-
 #load packages
 library(tidyverse)
-library(nflfastR)
+#library(nflfastR)
+
 
 #Import Data ----
 PFFScout = read.csv("PFFScoutingData.csv")
 games = read.csv("games.csv")
 players = read.csv("players.csv")
+players = rename(players, returnerId = nflId)
 plays = read.csv("plays.csv")
 tracking2018 = read.csv("tracking2018.csv")
 tracking2019 = read.csv("tracking2019.csv")
 tracking2020 = read.csv("tracking2020.csv")
+
+tracking2018$year = 2018
+tracking2019$year = 2019
+tracking2020$year = 2020
+tracking = rbind(tracking2018, tracking2019, tracking2020)
 
 #Merging Scout data & play data ----
 DataMerge = merge(plays,PFFScout, by= c("gameId","playId"), all =TRUE)
@@ -22,35 +28,80 @@ DataMerge = merge(plays,PFFScout, by= c("gameId","playId"), all =TRUE)
 #Subsetting kickoff data
 KickOffData = subset(DataMerge, specialTeamsPlayType == "Kickoff")
 
-# remove safety, onsides, and squibs kicks. Basically only keeping normal kicks
-KickOffData = subset(KickOffData, !(kickType %in% c("K", "O", "Q", "S")))
-KickOffData = KickOffData[-grep("onside", KickOffData$playDescription), ]
+#pull kickoffs that are caught outside of the hashmarks and are returned ----
+KickOffData1 = select(KickOffData, gameId, playId, kickReturnYardage, returnerId)
 
-#Marker for the spot of the ball at the end of the play
-KickOffData$spotOnFieldFinal = 100 - KickOffData$yardlineNumber - KickOffData$playResult
+#all plays where there is a kickoff
+trackingKickoff = tracking %>%
+  dplyr::filter(event == "kickoff") %>%
+  dplyr::filter(displayName == "football") %>%
+  dplyr::select(gameId, playId, event)
 
+#all plays where a ball is caught (includes punts, kickoffs, safeties)
+trackingKick_received = tracking %>%
+  dplyr::filter(event == "kick_received") %>%
+  dplyr::filter(stringr::str_detect(displayName, "football")) %>%
+  dplyr::select(gameId, playId, x, y, event, displayName, frameId) 
 
-KickOffData$spotFielded1 = word(KickOffData$playDescription,10)
-KickOffData$spotFielded1 = str_sub(KickOffData$spotFielded, end = -2)
-KickOffData$spotFielded2 = word(KickOffData$playDescription,9)
-KickOffData$spotFielded2 = str_sub(KickOffData$spotFielded2, end = -2)
+#plays that ended with a tackle, touchdown, or ran out of bounds
+trackingEvent2 = tracking %>%
+  dplyr::filter(event =="tackle" | event =="touchdown" | event =="out_of_bounds") %>%
+  dplyr::filter(displayName == "football") %>%
+  dplyr::select(gameId, playId, x, y, event, displayName, frameId)
 
-KickOffData$spotFielded = ifelse(KickOffData$yardlineNumber == "50" ,KickOffData$spotFielded2,KickOffData$spotFielded1)
-KickOffData$spotFielded = ifelse(KickOffData$specialTeamsResult == "Touchback" ,"25",KickOffData$spotFielded)
-KickOffData = KickOffData[!is.na(KickOffData$spotFielded),]
-KickOffData$spotFielded = as.numeric(KickOffData$spotFielded)
+all_returns = trackingKickoff %>% 
+  left_join(trackingKick_received, by=c("gameId", "playId")) %>% 
+  left_join(trackingEvent2, by=c("gameId", "playId")) %>%
+  drop_na(event.x, event.y) %>% 
+  drop_na(x.y, y.y)
 
-##gg ----
-ggplot(KickOffData, aes(spotFielded, spotOnFieldFinal))+
-  geom_point(aes(color = factor(kickType)))
+#label returns caught outside of the hashes that go cross field (i.e. midline)
+all_returns = all_returns %>% 
+  dplyr::filter(!between(y.x, 23.3, 29.9))  %>% 
+  mutate(crosses = sign(y.x - 26.67) != sign(y.y - 26.67))
 
-# Creating buckets ----
-KickOffData$spotFieldedBucket = "" 
-KickOffData$spotFieldedBucket = cut(KickOffData$spotFielded, breaks = c(-20, 0,5,10,15,20,25,30,100))
+#drop_na removes fumbles and muffs that aren't recovered by the initial returner
+all_returns = all_returns %>% 
+  left_join(KickOffData1, by=c("gameId", "playId"))%>% 
+  drop_na(kickReturnYardage)
 
-ggplot(KickOffData, aes(spotFieldedBucket, spotOnFieldFinal))+
+all_returns = all_returns %>% 
+  drop_na(kickReturnYardage)
+
+no_cross_return = all_returns %>%
+  dplyr::filter(crosses == "FALSE")
+
+cross_returns = all_returns %>%
+  dplyr::filter(crosses == "TRUE")  
+
+mean(no_cross_return$kickReturnYardage)
+mean(cross_returns$kickReturnYardage)
+
+all_returns$returnerId = as.numeric(all_returns$returnerId)
+all_returns = all_returns %>%
+  drop_na(returnerId)
+
+all_returns$sideoffield = case_when(all_returns$y.x >= 29.9 ~ "Right", TRUE ~ "Left")
+
+all_returns = all_returns %>% 
+  left_join(players, by=c("returnerId"))
+
+all_returns$displayName = as.factor(all_returns$displayName)
+all_returns$crosses =   as.factor(all_returns$crosses)
+all_returns$sideoffield =  as.factor(all_returns$sideoffield)
+
+all_returns = all_returns %>%
+  dplyr::select(-c(displayName.y, height, weight, birthDate, collegeName, Position))
+
+### ----
+#returner returns count
+dplyr::count(all_returns, displayName)
+
+ggplot(all_returns, aes(crosses, kickReturnYardage))+
   geom_boxplot()
 
-# Expected score based on starting field postion
+ggplot(all_returns, aes(sideoffield, kickReturnYardage))+
+  geom_boxplot()
 
-View(KickOffData)
+summary(lm(kickReturnYardage ~ crosses + sideoffield, data = all_returns))
+summary(lm(kickReturnYardage ~ crosses + sideoffield + displayName, data = all_returns))
