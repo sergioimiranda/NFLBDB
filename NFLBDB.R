@@ -2,17 +2,18 @@
 #install.packages("devtools")
 #install.packages("tidyverse")
 #install.packages("nflfastR")
+#install.packages("lme4")
 #load packages
 library(tidyverse)
 #library(nflfastR)
-
+library(lme4)
 
 #Import Data ----
 PFFScout = read.csv("PFFScoutingData.csv")
 games = read.csv("games.csv")
 players = read.csv("players.csv")
-players = rename(players, returnerId = nflId)
 plays = read.csv("plays.csv")
+plays = rename(plays, nflId = returnerId )
 tracking2018 = read.csv("tracking2018.csv")
 tracking2019 = read.csv("tracking2019.csv")
 tracking2020 = read.csv("tracking2020.csv")
@@ -29,7 +30,7 @@ DataMerge = merge(plays,PFFScout, by= c("gameId","playId"), all =TRUE)
 KickOffData = subset(DataMerge, specialTeamsPlayType == "Kickoff")
 
 #pull kickoffs that are caught outside of the hashmarks and are returned ----
-KickOffData1 = select(KickOffData, gameId, playId, kickReturnYardage, returnerId)
+KickOffData1 = select(KickOffData, gameId, playId, kickReturnYardage, nflId)
 
 #all plays where there is a kickoff
 trackingKickoff = tracking %>%
@@ -68,6 +69,14 @@ all_returns = all_returns %>%
 all_returns = all_returns %>% 
   drop_na(kickReturnYardage)
 
+
+
+all_returns$nflId = as.numeric(all_returns$nflId)
+all_returns = all_returns %>%
+  drop_na(nflId)
+
+all_returns$side_of_field = case_when(all_returns$y.x >= 29.9 ~ "Right", TRUE ~ "Left")
+
 no_cross_return = all_returns %>%
   dplyr::filter(crosses == "FALSE")
 
@@ -78,21 +87,16 @@ right_return = all_returns %>%
   dplyr::filter(side_of_field == "Right")
 
 left_return = all_returns %>%
-  dplyr::filter(side_of_field == "Left")  
+  dplyr::filter(side_of_field == "Left") 
+
+all_returns = all_returns %>% 
+  left_join(players, by=c("nflId"))
 
 mean(no_cross_return$kickReturnYardage)
 mean(cross_returns$kickReturnYardage)
 
-all_returns$returnerId = as.numeric(all_returns$returnerId)
-all_returns = all_returns %>%
-  drop_na(returnerId)
 
-all_returns$side_of_field = case_when(all_returns$y.x >= 29.9 ~ "Right", TRUE ~ "Left")
-
-all_returns = all_returns %>% 
-  left_join(players, by=c("returnerId"))
-
-all_returns$displayName = as.factor(all_returns$displayName)
+all_returns$nflId = as.factor(all_returns$nflId)
 all_returns$crosses =   as.factor(all_returns$crosses)
 all_returns$side_of_field =  as.factor(all_returns$side_of_field)
 
@@ -101,7 +105,7 @@ all_returns = all_returns %>%
 
 ### ----
 #returner returns count
-dplyr::count(all_returns, displayName)
+dplyr::count(all_returns, nflId)
 
 ggplot(all_returns, aes(crosses, kickReturnYardage))+
   geom_boxplot()
@@ -111,22 +115,37 @@ ggplot(all_returns, aes(side_of_field, kickReturnYardage))+
 
 # t test for difference in crossing
 t.test(right_return$kickReturnYardage,left_return$kickReturnYardage)
-#there is a difference on the side of the field
+# there is a difference on the side of field
 
 # t test for side of the field we start on
 t.test(no_cross_return$kickReturnYardage,cross_returns$kickReturnYardage)
-#there is a difference on the side of field
+#there is a difference on the side of the field
 
-fit.1 = lm(kickReturnYardage ~ crosses + side_of_field + displayName, data = all_returns)
+fit.1 = lm(kickReturnYardage ~ crosses + side_of_field + nflId, data = all_returns)
 summary(fit.1)
 
-table(all_returns$displayName, all_returns$crosses)
-
-newdata = data.frame(crosses="FALSE", side_of_field="Right", displayName="Jamal Agnew")
-predict(fit.1, newdata)
 ggplot(all_returns, aes(crosses, side_of_field, fill= kickReturnYardage)) + 
   geom_tile()+
   scale_fill_gradient(low="white", high="black") 
-  
 
+
+
+return_count_by_Id = count(all_returns, nflId)
+return_count_by_Id$nflId = as.character(return_count_by_Id$nflId)
+return_count_by_Id$Id = case_when(return_count_by_Id$n <= 5 ~ "filler_Id", TRUE ~ return_count_by_Id$nflId)
+return_count_by_Id$nflId =  as.factor(return_count_by_Id$nflId)
+return_count_by_Id$Id =  as.factor(return_count_by_Id$Id)
+
+all_returns = all_returns %>% 
+  left_join(return_count_by_Id, by=c("nflId"))
+all_returns = all_returns %>% 
+  dplyr::select(-c("n"))
+
+fit.2 = lm(kickReturnYardage ~ crosses + side_of_field + Id, data = all_returns)
+summary(fit_mixed)
+
+fit_mixed = lmer(kickReturnYardage ~ crosses + side_of_field + (1 | Id), data = all_returns)
+summary(fit_mixed)
+ranef(fit_mixed)$Id %>% head(5)
+coef(fit_mixed)$Id 
 
