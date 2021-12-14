@@ -1,19 +1,20 @@
+#packages ----
 #install.packages("gganimate")
 #install.packages("gifski")
 #install.packages("png")
-
 library(gganimate)
 library(png)
 library(gifski)
 
-team_ <- "KC"
-returner <- "D.Harris"
+#set what player/play you want to see ----
+team_ <- "CHI"
+returner <- "J.Holtz"
 
 dfplays = KickOffData %>% 
   dplyr::filter(stringr::str_detect(playDescription, returner)) %>%
   dplyr::arrange(-kickReturnYardage) %>%
   dplyr::select(gameId, playId, possessionTeam, playDescription, absoluteYardlineNumber)%>%
-  dplyr::slice(2)
+  dplyr::slice(6)
 
 game_ <- games %>%
   dplyr::filter(gameId == dfplays$gameId)
