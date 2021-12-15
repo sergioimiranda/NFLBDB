@@ -32,9 +32,10 @@ KickOffData = subset(DataMerge, specialTeamsPlayType == "Kickoff")
 # remove safety, onsides, and squibs kicks. Basically only keeping normal kicks
 KickOffData = subset(KickOffData, !(kickType %in% c("K", "O", "Q", "S")))
 KickOffData = KickOffData[-grep("onside", KickOffData$playDescription), ]
+KickOffData$scoreDifferential = abs(KickOffData$preSnapHomeScore - KickOffData$preSnapVisitorScore)
 
 #pull kickoffs that are caught outside of the hashmarks and are returned ----
-KickOffData1 = select(KickOffData, gameId, playId, kickReturnYardage, nflId)
+KickOffData1 = select(KickOffData, gameId, playId, kickReturnYardage, nflId, scoreDifferential)
 
 #all plays where there is a kickoff ----
 trackingKickoff = tracking %>%
@@ -123,6 +124,9 @@ mean(cross_returns$kickReturnYardage)
 ggplot(all_returns, aes(crosses, kickReturnYardage))+
   geom_boxplot()
 
+mean(left_return$kickReturnYardage)
+mean(right_return$kickReturnYardage)
+
 ggplot(all_returns, aes(side_of_field, kickReturnYardage))+
   geom_boxplot()
 
@@ -136,13 +140,13 @@ t.test(right_return$kickReturnYardage,left_return$kickReturnYardage)
 
 # t test for side of the field we start on
 t.test(no_cross_return$kickReturnYardage,cross_returns$kickReturnYardage)
-#there is a difference on the side of the field
+#there is a difference for cross vs no cross
 
 #couple of diff models ----
 #simple linear regression just to see what we're working with
-summary(lm(kickReturnYardage ~ crosses + side_of_field + Id, data = all_returns))
+summary(lm(kickReturnYardage ~ crosses + side_of_field + Id + scoreDifferential, data = all_returns))
 #mixed model with crosses as the random effect
-fit_mixed = lmer(kickReturnYardage ~ crosses + side_of_field + (crosses | Id), data = all_returns)
+fit_mixed = lmer(kickReturnYardage ~ crosses + scoreDifferential + side_of_field + (crosses | Id), data = all_returns)
 summary(fit_mixed)
 ranef(fit_mixed)$Id %>% head(5)
 coef(fit_mixed)$Id %>% head(5)

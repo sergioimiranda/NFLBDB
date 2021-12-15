@@ -8,13 +8,13 @@ library(gifski)
 
 #set what player/play you want to see ----
 team_ <- "CHI"
-returner <- "J.Holtz"
+returner <- "C.Patterson"
 
 dfplays = KickOffData %>% 
   dplyr::filter(stringr::str_detect(playDescription, returner)) %>%
   dplyr::arrange(-kickReturnYardage) %>%
   dplyr::select(gameId, playId, possessionTeam, playDescription, absoluteYardlineNumber)%>%
-  dplyr::slice(6)
+  dplyr::slice(2)
 
 game_ <- games %>%
   dplyr::filter(gameId == dfplays$gameId)
