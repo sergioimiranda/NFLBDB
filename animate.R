@@ -19,7 +19,7 @@ dfplays = KickOffData %>%
 game_ <- games %>%
   dplyr::filter(gameId == dfplays$gameId)
 
-df_track <- tracking %>%
+df_track <- tracking_data_used %>%
   dplyr::filter(gameId == dfplays$gameId, playId == dfplays$playId)
 
 df_track %>% head()
