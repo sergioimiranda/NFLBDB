@@ -40,9 +40,9 @@ KickOffData = KickOffData %>%
   select(gameId, playId, playDescription, quarter, possessionTeam, nflId, kickReturnYardage, scoreDifferential, homeTeamAbbr, visitorTeamAbbr, absoluteYardlineNumber)
 
 #Import Tracking Data ----
-tracking2018 = read.csv("tracking2018.csv")
-tracking2019 = read.csv("tracking2019.csv")
-tracking2020 = read.csv("tracking2020.csv")
+#tracking2018 = read.csv("tracking2018.csv")
+#tracking2019 = read.csv("tracking2019.csv")
+#tracking2020 = read.csv("tracking2020.csv")
 
 #Filtering Tracking Data for Kickoffs Only
 tracking_data_used_bind = rbind(tracking2018, tracking2019, tracking2020) %>% #using tracking_data_used_bind to save time from having to load each individual tracking_year data
@@ -242,7 +242,7 @@ tracking_data_used_after_3_kick_team = tracking_data_used_after_3 %>%
   filter(IsOnReturnTeam == FALSE)
 tracking_data_used_after_3_returner = tracking_data_used_after_3 %>%
   filter(IsReturner == TRUE) %>%
-  select(gameId, playId, player_influence, distance_to_25, a) #selecing field control of returner, acceleration, and distance to the 25, 3 frames after catch
+  select(gameId, playId, player_influence, distance_to_25, a,s) #selecing field control of returner, acceleration, and distance to the 25, 3 frames after catch
 
 #max player influence of the kick team 3 frames after the catch (includes, distance to ball)
 max_player_influence_kick_team_by_distance = tracking_data_used_after_3_kick_team %>%
@@ -259,19 +259,40 @@ aggregate(x=all_returns$kickReturnYardage,
           by=list(all_returns$crosses,all_returns$side_of_field_received),
           FUN=mean)
 
+fivenum <- all_returns %>% 
+  group_by(side_of_field_received) %>% 
+  summarise(five = list(fivenum(kickReturnYardage))) 
+  tidyr::unnest()
+
 ggplot(all_returns, aes(side_of_field_received, kickReturnYardage))+
-  geom_boxplot()
-
+  geom_boxplot() +
+  stat_summary(geom="text", fun=quantile,
+               aes(label=sprintf("%1.1f", ..y..)),
+               position=position_nudge(x=0.45), size=3.5) +
+  labs(title ="Box Plot of What Side Was the Ball Received",  x = "Side of Field the Ball was Received", y = "Kick Return Yardage")+
+  theme_bw()
+  
+  
+  
 ggplot(all_returns, aes(crosses, kickReturnYardage))+
-  geom_boxplot()
+  geom_boxplot() +
+  stat_summary(geom="text", fun=quantile,
+               aes(label=sprintf("%1.1f", ..y..)),
+               position=position_nudge(x=0.45), size=3.5)  +
+  labs(title = "Box Plot of Did the Returner Go Crossfield", x = "Did the Returner Go Crossfield", y = "Kick Return Yardage") +
+  theme_bw()
 
-ggplot(all_returns, aes(crosses, side_of_field_received, fill= kickReturnYardage, label = kickReturnYardage)) + 
+
+library(plyr)
+DF1 <- ddply(all_returns, .(crosses, side_of_field_received), summarize, kickReturnYardage=mean(kickReturnYardage))
+ggplot(data=DF1, aes(crosses, side_of_field_received, fill= kickReturnYardage)) +
   geom_tile()+
-  scale_fill_gradient(low="white", high="black") +
-  geom_text() 
+  geom_text(aes(y=side_of_field_received,label=sprintf("%1.1f", kickReturnYardage)))+
+  scale_fill_gradient(low="blue", high="green") +
+  theme_bw()+
+  theme(panel.border = element_blank(),panel.grid.major = element_blank(), panel.grid.minor = element_blank())+
+  labs(title = "Plot of Mean Kick Return Yards by Parameter", y = "Side of Field the Ball was Received", x = "Did the Returner Go Crossfield")
 
-ggplot(all_returns, aes(y=crosses, x=side_of_field_received, color=side_of_field_received, group=successful_return)) +
-  geom_count(alpha=0.5) 
 
 #visualize more freq returners
 sample_plays <- all_returns %>% 
@@ -291,9 +312,13 @@ cross_returns = all_returns %>%
 
 right_return = all_returns %>%
   dplyr::filter(side_of_field_received == "Right")
-
+nrow(left_return)
 left_return = all_returns %>%
   dplyr::filter(side_of_field_received == "Left") 
+cv(cross_returns$kickReturnYardage )
+sd(no_cross_return$kickReturnYardage )
+nrow(no_cross_return)
+nrow(cross_returns)
 # t test for difference in crossing
 t.test(right_return$kickReturnYardage,left_return$kickReturnYardage)
 # there is a difference on the side of field
@@ -313,4 +338,27 @@ summary(lmer(kickReturnYardage ~ scoreDifferential + a + player_influence.x + pl
 
 summary(lm(kickReturnYardage ~ scoreDifferential + a + player_influence.x + player_influence.y + dist_to_ball + distance_to_25 + 
                side_of_field_received + crosses, data = all_returns))
+all_returns %>%
+  filter(x_received >= -1, y_received>0)  %>%
+ggplot(aes(x = x_received, y = y_received)) +
+  geom_point()+
+  # major lines
+  annotate("segment", x = c(0, 0, 0,field_width, seq(10, 110, by=5)), xend = c(field_width,field_width, 0, field_width, seq(10, 110, by=5)),
+           y = c(0, field_height, 0, 0, rep(0, 21)), yend = c(0, field_height, field_height, field_height, rep(field_height, 21))) +
+  # hashmarks
+  annotate("segment", x = rep(seq(10, 110, by=1), 4),xend = rep(seq(10, 110, by=1), 4),
+           y = c(rep(0, 101), rep(field_height-1, 101), rep(160/6 + 18.5/6, 101), rep(160/6 - 18.5/6, 101)), yend = c(rep(1, 101), rep(field_height, 101), rep(160/6 + 18.5/6 + 1, 101), rep(160/6 - 18.5/6 - 1, 101))) +
+  # yard numbers
+  annotate("text", x = seq(20, 100, by = 10), y = rep(12, 9),
+           label = c(seq(10, 50, by = 10), rev(seq(10, 40, by = 10))), size = 10) +
+  # yard numbers upside down
+  annotate("text", x = seq(20, 100, by = 10), y = rep(field_height-12, 9), 
+           label = c(seq(10, 50, by = 10), rev(seq(10, 40, by = 10))), angle = 180, size = 10)
 
+
+
+#logistic regression
+#summary(glm(successful_return ~  side_of_field_received + crosses + player_influence.x + player_influence.y + dist_to_ball + distance_to_25,
+#            family=binomial,data=all_returns))
+
+summary(lm(kickReturnYardage ~ scoreDifferential + side_of_field_received + crosses + a + player_influence.x + player_influence.y + dist_to_ball + distance_to_25, data = all_returns))
